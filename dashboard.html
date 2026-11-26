@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>경제 지표 대시보드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: 신문 경제면 그래픽 데스크 — 차분하고 정확하게
+   IDEA: 아침 시황판. 지표 하나가 한 장의 카드
+   PICTURE: 지표별 1년 추이선과 점선 추세선
+   COLOUR and TYPE: 흰 바탕, 먹색 글자, 파란 선 하나, 상태 표시에만 보조색 / Noto Sans KR
+   LAYOUT: 상단 제목·업데이트 버튼 → 요약 → 탭 → 카드 격자 → 전체 표 */
+:root{color-scheme:light dark;
+ --bg:light-dark(#ffffff,#0e1116);--panel:light-dark(#f6f7f9,#161b22);
+ --ink:light-dark(#14181f,#e8ebf0);--muted:light-dark(#5d6672,#9aa4b1);
+ --line:light-dark(#e3e6ea,#262d37);--accent:light-dark(#0a5cff,#5b93ff);
+ --trend:light-dark(#8a929c,#7d8794);--new:light-dark(#e6efff,#13254a);--newink:light-dark(#0a47c4,#9fc0ff);
+ --warn:light-dark(#fff3dc,#3a2c10);--warnink:light-dark(#8a5a00,#f0c674);
+ --err:light-dark(#fdecec,#3a1717);--errink:light-dark(#a32626,#ff9b9b)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Noto Sans KR",system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(24px,3.5vw,48px) max(5vw,16px);max-width:1340px;margin:0 auto}
+header.band{display:flex;flex-wrap:wrap;gap:20px 32px;align-items:flex-end;justify-content:space-between;padding-bottom:12px}
+h1{font-size:clamp(28px,4vw,42px);line-height:1.05;margin:0 0 8px;font-weight:800;text-wrap:balance}
+.meta{color:var(--muted);font-size:14px}
+button{font:inherit;cursor:pointer}
+#updateBtn{min-height:52px;padding:0 28px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-size:17px;font-weight:700;display:inline-flex;gap:10px;align-items:center}
+#updateBtn:disabled{opacity:.6;cursor:wait}
+#updateBtn:focus-visible,.tab:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.spin{width:16px;height:16px;border:2.5px solid #fff;border-right-color:transparent;border-radius:50%;display:none}
+.busy .spin{display:inline-block;animation:r .8s linear infinite}
+@keyframes r{to{transform:rotate(1turn)}}
+@media(prefers-reduced-motion:reduce){.busy .spin{animation:none}}
+.notice{margin:0 0 14px;padding:12px 16px;border-radius:10px;font-size:14px}
+.notice.info{background:var(--panel);color:var(--muted)}.notice.error{background:var(--err);color:var(--errink)}
+.summary{display:flex;flex-wrap:wrap;gap:10px;margin:4px 0 18px}
+.pill{padding:6px 12px;border-radius:999px;font-size:14px;background:var(--panel)}
+.pill b{font-weight:700}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--line);margin-bottom:20px}
+.tab{min-height:44px;padding:0 16px;border:0;background:none;color:var(--muted);font-size:15px;border-bottom:2.5px solid transparent;margin-bottom:-1px}
+.tab[aria-selected=true]{color:var(--ink);font-weight:700;border-bottom-color:var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:16px}
+.card{border:1px solid var(--line);border-radius:12px;padding:16px 16px 12px;display:flex;flex-direction:column;gap:4px}
+.card.failed{background:var(--err);border-color:transparent}
+.top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.name{font-size:15px;font-weight:700;line-height:1.35}
+.ctry{color:var(--muted);font-weight:500;margin-right:4px}
+.badges{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.badge{font-size:12px;padding:2px 7px;border-radius:5px;white-space:nowrap}
+.badge.new{background:var(--new);color:var(--newink)}.badge.stale{background:var(--warn);color:var(--warnink)}
+.value{font-size:30px;font-weight:800;line-height:1.15;font-variant-numeric:tabular-nums;margin-top:4px}
+.value small{font-size:14px;font-weight:500;color:var(--muted);margin-left:4px}
+.cmp{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.cmp b{color:var(--ink);font-weight:700}
+.fig{position:relative;height:120px;margin:8px 0 2px}
+.fig>svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12.5px;padding:4px 8px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-110%);display:none;font-variant-numeric:tabular-nums}
+.pos{margin:6px 0 2px;font-size:13px;color:var(--muted)}
+.pos-txt{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.pos-txt b{color:var(--ink)}
+.pos-bar{position:relative;height:6px;border-radius:3px;margin:6px 0 3px;background:linear-gradient(90deg,var(--line),light-dark(#c9d6f2,#2a3a5c))}
+.pos-bar span{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);transform:translate(-50%,-50%)}
+.pos-ends{display:flex;justify-content:space-between;font-size:11.5px;font-variant-numeric:tabular-nums}
+.note{font-size:12.5px;color:var(--muted)}
+.foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:8px;margin-top:4px}
+.err{font-size:14px;color:var(--errink);margin-top:6px;overflow-wrap:anywhere}
+h2{font-size:22px;margin:36px 0 12px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:700;background:var(--panel);white-space:nowrap}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sub{color:var(--muted);font-size:12.5px}
+.empty{padding:48px 16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:12px}
+.ins-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:24px;margin-top:8px}
+.ins-wrap h3{font-size:17px;margin:0 0 10px}
+.ins{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.ins li{border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.ins .hd{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.lv{font-size:12px;font-weight:700;padding:2px 8px;border-radius:5px;white-space:nowrap}
+.lv.주의{background:var(--err);color:var(--errink)}.lv.관심{background:var(--warn);color:var(--warnink)}.lv.참고{background:var(--panel);color:var(--muted)}
+.ins .t{font-weight:700}
+.ins .w{color:var(--muted);font-size:13px}
+.ins p{margin:6px 0 4px;font-size:15px}
+.ins .b{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tg-days{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.tg-day{min-height:44px;padding:0 16px;border:1px solid var(--line);border-radius:999px;background:var(--bg);color:var(--ink);font-size:15px;display:inline-flex;align-items:center;gap:8px}
+.tg-day[aria-selected=true]{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:700}
+.tg-day:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.tg-day small{font-size:12px;opacity:.75;font-weight:500}
+.tg-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:4px 32px}
+.tg-col{display:flex;flex-direction:column;gap:8px}
+.tg-card{border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.tg-top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.tg-top a,.tg-card a{color:var(--accent)}
+.tg-head{font-size:16px;font-weight:700;line-height:1.45}
+.dir{font-size:12px;font-weight:700;padding:2px 7px;border-radius:5px;margin-right:6px;white-space:nowrap;background:var(--panel);color:var(--muted)}
+.dir.up{background:var(--err);color:var(--errink)}.dir.down{background:var(--new);color:var(--newink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}.chip{font-size:13px;padding:2px 9px;border-radius:999px;background:var(--panel)}
+.fwrap{position:relative;display:inline-block}
+button.chip{font:inherit;font-size:13px;border:1px solid transparent;color:var(--ink);cursor:help;min-height:30px;padding:2px 11px}
+button.chip.has{border-color:var(--line);text-decoration:underline dotted;text-underline-offset:3px}
+button.chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.pop{display:none;position:absolute;z-index:20;top:calc(100% + 6px);left:0;width:min(380px,calc(100vw - 32px));padding:12px 14px;border-radius:10px;
+  background:var(--bg);color:var(--ink);border:1px solid var(--line);box-shadow:0 8px 28px rgba(0,0,0,.18);font-size:13.5px;line-height:1.55}
+.fwrap:hover .pop,.fwrap:focus-within .pop,.fwrap.open .pop{display:block}
+.pop::before{content:"";position:absolute;top:-8px;left:0;right:0;height:8px}
+.pop h4{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:700}
+.pop ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:6px}
+.pop mark{background:light-dark(#fff1b8,#5a4a10);color:inherit;border-radius:2px;padding:0 1px}
+.pop a{font-size:12px;margin-left:4px}
+.kind{font-size:11.5px;font-weight:700;color:var(--muted);margin-right:4px}
+.tg-rows{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:14px;margin:0}
+.tg-rows dt{color:var(--muted);white-space:nowrap}.tg-rows dd{margin:0}
+.tg-list{margin:0;padding-left:18px;font-size:14px}
+.tg-sec{font-size:13px;font-weight:700;color:var(--muted);margin-top:4px}
+.none{color:var(--muted);font-size:15px;padding:14px;border:1px dashed var(--line);border-radius:10px}
+a.pill{color:inherit;text-decoration:none}a.pill:hover{text-decoration:underline}
+.act{display:flex;flex-direction:column;align-items:flex-end;gap:8px;max-width:480px}
+.cnt{background:#fff;color:var(--accent);border-radius:999px;font-size:13px;font-weight:800;padding:1px 8px;min-width:24px;text-align:center}
+.pending{font-size:13.5px;color:var(--muted);text-align:right;line-height:1.45}
+.pending b{color:var(--ink)}
+.pending button{border:0;background:none;color:var(--accent);font-size:13px;padding:0;text-decoration:underline;min-height:24px}
+@media(max-width:600px){header.band{align-items:stretch}.act{align-items:stretch;max-width:none}.pending{text-align:left}#updateBtn{width:100%;justify-content:center}}
+</style>
+</head>
+<body>
+<header class="band">
+  <div>
+    <h1>경제 지표 대시보드</h1>
+    <div class="meta" id="meta">아직 업데이트한 적이 없습니다.</div>
+  </div>
+  <div class="act">
+    <button id="updateBtn" type="button"><span class="spin"></span><span id="btnText">업데이트</span><span class="cnt" id="btnCnt" hidden></span></button>
+    <div class="pending" id="pending" aria-live="polite">새 발표 확인 중…</div>
+  </div>
+</header>
+
+<main class="band" style="padding-top:8px">
+  <div id="notices"></div>
+  <div class="summary" id="summary"></div>
+  <div class="tabs" role="tablist" id="tabs">
+    <button class="tab" role="tab" data-f="all" aria-selected="true">전체</button>
+    <button class="tab" role="tab" data-f="미국" aria-selected="false">미국</button>
+    <button class="tab" role="tab" data-f="한국" aria-selected="false">한국</button>
+    <button class="tab" role="tab" data-f="한미" aria-selected="false">한미 비교</button>
+    <button class="tab" role="tab" data-f="new" aria-selected="false">새 발표만</button>
+  </div>
+  <div class="grid" id="grid"></div>
+
+  <h2>한눈에 보기</h2>
+  <div class="tabs" role="tablist" id="tableTabs">
+    <button class="tab" role="tab" data-t="미국" aria-selected="true">미국</button>
+    <button class="tab" role="tab" data-t="한국" aria-selected="false">한국</button>
+    <button class="tab" role="tab" data-t="한미" aria-selected="false">한미 비교</button>
+  </div>
+  <div class="scroll"><table id="table"></table></div>
+  <p class="sub" style="margin-top:12px">직전값은 바로 앞 발표값입니다(정책금리는 마지막으로 바뀌기 전 금리). 1년 추세는 최근 1년 자료에 맞춘 직선이 1년 동안 움직인 폭입니다. 차트의 실선은 실제값, 점선은 추세선입니다. 역사적 위치는 최신값이 최근 10년 자료 중 어디쯤인지 나타냅니다(상위 10%면 10년 중 가장 높은 쪽 10% 안). 자료가 10년보다 짧은 지표는 있는 기간만으로 계산합니다. 한미 금리차는 한국 − 미국이며, 음수면 미국 금리가 더 높은 역전 상태입니다.</p>
+
+  <h2 id="telegram">텔레그램 브리핑</h2>
+  <div id="tg"></div>
+  <p class="sub" style="margin-top:10px">채널 글을 정해 둔 문장 틀(원인 연결어·방향 단어)로 나눈 결과입니다. 규칙이 잘못 자를 수 있으니 중요한 내용은 원문 링크로 확인하세요. 정리 규칙은 telegram_brief.py에서 바꿀 수 있습니다.</p>
+
+  <h2 id="insights">경제 지표 해설</h2>
+  <div class="ins-wrap">
+    <section><h3>이번 업데이트에서 주목할 점</h3><div id="insNew"></div></section>
+    <section><h3>현재 이슈가 될 만한 점</h3><div id="insNow"></div></section>
+  </div>
+  <p class="sub" style="margin-top:14px">해설은 정해 둔 숫자 기준(insights.py의 THRESHOLDS)에 걸린 경우에만 나오는 참고 문구입니다. 뉴스 맥락이나 시장 예상치는 반영하지 않습니다.</p>
+</main>
+
+<script>
+{
+const $ = id => document.getElementById(id);
+let DATA = null, filter = 'all';
+const OFF_MSG = '서버가 꺼져 있습니다. 폴더의 "대시보드 열기" 파일을 더블클릭하면 서버가 켜지고 이 페이지가 다시 열립니다.';
+let tableFilter = '미국';
+try { filter = localStorage.getItem('ind-filter') || 'all'; tableFilter = localStorage.getItem('table-filter') || '미국'; } catch (e) {}
+
+const fmt = (v, unit) => {
+  if (v === null || v === undefined) return '-';
+  const d = unit === '건' ? 0 : (Math.abs(v) >= 1000 ? 1 : 2);
+  return v.toLocaleString('ko-KR', {minimumFractionDigits: d, maximumFractionDigits: d});
+};
+const signed = (v, unit) => v === null || v === undefined ? '-' : (v > 0 ? '+' : v < 0 ? '−' : '') + fmt(Math.abs(v), unit);
+const arrow = v => v > 0 ? '▲ ' : v < 0 ? '▼ ' : '';
+const fdate = (s, freq) => {
+  if (!s) return '-';
+  const [y, m, d] = s.split('-');
+  if (freq === 'Q') return `${y}년 ${Math.floor((+m - 1) / 3) + 1}분기`;
+  if (freq === 'M') return `${y}.${m}`;
+  return `${y}.${m}.${d}`;
+};
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const posText = p => p.pct >= 50 ? `상위 ${Math.max(1, Math.round(100 - p.pct))}%` : `하위 ${Math.max(1, Math.round(p.pct))}%`;
+const yrs = p => `최근 ${p.years >= 9.5 ? 10 : Math.max(1, Math.round(p.years))}년`;
+function posBlock(r) {
+  const p = r.position;
+  if (!p) return '<div class="pos">역사적 위치: 자료 부족</div>';
+  const x = Math.min(100, Math.max(0, (r.latest - p.min) / ((p.max - p.min) || 1) * 100));
+  return `<div class="pos">
+    <div class="pos-txt"><span>${yrs(p)} 위치 <b>${posText(p)}</b> · ${esc(p.label)}</span><span>평균 ${fmt(p.avg, r.unit)}</span></div>
+    <div class="pos-bar" title="${yrs(p)} 최저~최고 범위에서 현재 위치"><span style="left:${x}%"></span></div>
+    <div class="pos-ends"><span>최저 ${fmt(p.min, r.unit)}</span><span>최고 ${fmt(p.max, r.unit)}</span></div></div>`;
+}
+
+function visible() {
+  const all = DATA?.indicators || [];
+  if (filter === 'new') return all.filter(r => r.ok && r.is_new);
+  if (filter === 'all') return all;
+  return all.filter(r => r.country === filter);
+}
+
+function card(r, i) {
+  const title = `<div class="name"><span class="ctry">${esc(r.country)}</span>${esc(r.name)}</div>`;
+  if (!r.ok) return `<article class="card failed"><div class="top">${title}</div>
+    <div class="err">불러오지 못했습니다: ${esc(r.error)}</div></article>`;
+  const badges = (r.is_new ? '<span class="badge new">새 발표</span>' : '') +
+                 (r.stale ? '<span class="badge stale">갱신 지연</span>' : '');
+  return `<article class="card">
+    <div class="top">${title}<div class="badges">${badges}</div></div>
+    <div class="value">${fmt(r.latest, r.unit)}<small>${esc(r.unit)}</small></div>
+    <div class="cmp">직전 ${fmt(r.prev, r.unit)} (${fdate(r.prev_date, r.freq)}) 대비 <b>${arrow(r.diff)}${signed(r.diff, r.unit)}</b></div>
+    <div class="fig" data-i="${i}"><svg></svg><div class="tip"></div></div>
+    ${posBlock(r)}
+    ${r.note ? `<div class="note">${esc(r.note)}</div>` : ''}
+    <div class="foot"><span>1년 추세 <b style="color:var(--ink)">${esc(r.trend)}</b>${r.trend_chg === null ? '' : ' ' + signed(r.trend_chg, r.unit)}</span>
+      <span>${fdate(r.latest_date, r.freq)} · ${esc(r.source)}</span></div>
+  </article>`;
+}
+
+function drawChart(box, r) {
+  const svg = box.querySelector('svg'), tip = box.querySelector('.tip');
+  const W = box.clientWidth, H = box.clientHeight;
+  const pts = r.series.map(([d, v]) => [new Date(d).getTime(), v]);
+  if (pts.length < 2 || !W) { svg.innerHTML = ''; return; }
+  const tr = r.trend_line ? r.trend_line.map(([d, v]) => [new Date(d).getTime(), v]) : [];
+  const ys = pts.map(p => p[1]).concat(tr.map(p => p[1]));
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+  const L = 44, R = 8, T = 6, B = 18;
+  const x0 = pts[0][0], x1 = pts[pts.length - 1][0];
+  const X = t => L + (t - x0) / (x1 - x0 || 1) * (W - L - R);
+  const Y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  const step = r.compare === 'change';
+  let d = '';
+  pts.forEach(([t, v], k) => {
+    if (k === 0) d += `M${X(t)},${Y(v)}`;
+    else d += step ? `H${X(t)}V${Y(v)}` : `L${X(t)},${Y(v)}`;
+  });
+  const ticks = [hi - pad, (hi + lo) / 2, lo + pad];
+  const mid = new Date((x0 + x1) / 2);
+  const lab = t => { const z = new Date(t); return `${String(z.getFullYear()).slice(2)}.${String(z.getMonth() + 1).padStart(2, '0')}`; };
+  const last = pts[pts.length - 1];
+  svg.innerHTML =
+    ticks.map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/>
+      <text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${fmt(v, r.unit === '건' ? '건' : '')}</text>`).join('') +
+    (W > 260 ? [x0, mid.getTime(), x1].map((t, k) => `<text x="${X(t)}" y="${H - 3}" font-size="11" fill="var(--muted)" text-anchor="${['start','middle','end'][k]}">${lab(t)}</text>`).join('') : '') +
+    (tr.length ? `<line x1="${X(tr[0][0])}" y1="${Y(tr[0][1])}" x2="${X(tr[1][0])}" y2="${Y(tr[1][1])}" stroke="var(--trend)" stroke-width="1.5" stroke-dasharray="5 4"/>` : '') +
+    `<path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+     <circle cx="${X(last[0])}" cy="${Y(last[1])}" r="4" fill="var(--accent)" stroke="var(--bg)" stroke-width="2"/>
+     <line class="cross" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/>
+     <circle class="dot" r="4" fill="var(--accent)" stroke="var(--bg)" stroke-width="2" visibility="hidden"/>`;
+  const cross = svg.querySelector('.cross'), dot = svg.querySelector('.dot');
+  const move = ev => {
+    const bx = box.getBoundingClientRect();
+    const px = (ev.touches ? ev.touches[0].clientX : ev.clientX) - bx.left;
+    const t = x0 + (px - L) / (W - L - R) * (x1 - x0);
+    let best = pts[0];
+    for (const p of pts) if (Math.abs(p[0] - t) < Math.abs(best[0] - t)) best = p;
+    const cx = X(best[0]), cy = Y(best[1]);
+    cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
+    dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.setAttribute('visibility', 'visible');
+    const iso = new Date(best[0]).toISOString().slice(0, 10);
+    tip.textContent = `${fdate(iso, r.freq)}  ${fmt(best[1], r.unit)} ${r.unit}`;
+    tip.style.display = 'block'; tip.style.left = Math.min(Math.max(cx, 60), W - 60) + 'px'; tip.style.top = cy + 'px';
+  };
+  const out = () => { cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); tip.style.display = 'none'; };
+  box.onmousemove = move; box.ontouchmove = move; box.onmouseleave = out; box.ontouchend = out;
+}
+
+const chartObserver = new ResizeObserver(entries => {
+  for (const e of entries) { const r = visible()[+e.target.dataset.i]; if (r && r.ok) drawChart(e.target, r); }
+});
+
+function render() {
+  for (const t of document.querySelectorAll('#tabs .tab')) t.setAttribute('aria-selected', t.dataset.f === filter);
+  const all = DATA?.indicators || [];
+  if (!all.length) {
+    $('grid').innerHTML = '<div class="empty">오른쪽 위 <b>업데이트</b> 버튼을 누르면 최신 지표를 불러옵니다.</div>';
+    $('table').innerHTML = ''; $('summary').innerHTML = ''; renderInsights(); renderTelegram(); return;
+  }
+  $('meta').textContent = `마지막 업데이트 ${DATA.updated_at}`;
+  const ok = all.filter(r => r.ok), news = ok.filter(r => r.is_new), stale = ok.filter(r => r.stale), fail = all.filter(r => !r.ok);
+  $('summary').innerHTML =
+    `<span class="pill">불러온 지표 <b>${ok.length}</b> / ${all.length}</span>` +
+    (DATA.first_run ? '<span class="pill">첫 업데이트입니다. 다음부터 새로 발표된 지표를 표시합니다.</span>'
+                    : `<span class="pill">지난 업데이트 이후 새 발표 <b>${news.length}</b></span>`) +
+    (stale.length ? `<span class="pill">갱신 지연 <b>${stale.length}</b></span>` : '') +
+    (fail.length ? `<span class="pill">실패 <b>${fail.length}</b></span>` : '') +
+    (DATA.insights ? `<a class="pill" href="#insights">해설 <b>${DATA.insights.new.length + DATA.insights.now.length}</b>건 보기 ↓</a>` : '');
+  renderInsights(); renderTelegram();
+  const notes = [];
+  if (DATA.has_ecos_key === false) notes.push('<div class="notice info">한국은행 ECOS 키가 없어 한국 지표는 FRED 대체 자료로 받았습니다. 일부는 갱신이 늦을 수 있습니다. config.py에 ECOS 키를 넣으면 한국은행에서 직접 받습니다.</div>');
+  $('notices').innerHTML = notes.join('');
+
+  const list = visible();
+  chartObserver.disconnect();
+  $('grid').innerHTML = list.length ? list.map(card).join('') : '<div class="empty">이번 업데이트에서 새로 발표된 지표가 없습니다.</div>';
+  for (const f of document.querySelectorAll('.fig')) chartObserver.observe(f);
+
+  renderTable();
+}
+
+// '한눈에 보기' 표: 선택한 국가의 지표만 보여 줌
+function renderTable() {
+  const all = DATA?.indicators || [];
+  for (const t of document.querySelectorAll('#tableTabs .tab')) {
+    const n = all.filter(r => r.country === t.dataset.t).length;
+    t.setAttribute('aria-selected', t.dataset.t === tableFilter);
+    t.textContent = n ? `${t.dataset.t} ${n}` : t.dataset.t;
+  }
+  const rows = all.filter(r => r.country === tableFilter);
+  if (!rows.length) { $('table').innerHTML = ''; return; }
+  $('table').innerHTML = `<tr><th>지표</th><th>기준 시점</th><th>최신값</th><th>직전값</th><th>차이</th><th>단위</th><th>1년 추세</th><th>역사적 위치</th></tr>` +
+    rows.map(r => r.ok ? `<tr><td>${esc(r.name)}${r.is_new ? ' <span class="badge new">새 발표</span>' : ''}${r.stale ? ' <span class="badge stale">갱신 지연</span>' : ''}</td>
+      <td>${fdate(r.latest_date, r.freq)}</td><td class="n">${fmt(r.latest, r.unit)}</td>
+      <td class="n">${fmt(r.prev, r.unit)}<div class="sub">${fdate(r.prev_date, r.freq)}</div></td>
+      <td class="n">${arrow(r.diff)}${signed(r.diff, r.unit)}</td><td>${esc(r.unit)}</td>
+      <td>${esc(r.trend)}${r.trend_chg === null ? '' : ` <span class="sub">${signed(r.trend_chg, r.unit)}</span>`}</td>
+      <td>${r.position ? `${posText(r.position)} <span class="sub">${esc(r.position.label)}</span><div class="sub">${yrs(r.position)} ${fmt(r.position.min, r.unit)} ~ ${fmt(r.position.max, r.unit)}</div>` : '-'}</td></tr>`
+      : `<tr><td>${esc(r.name)}</td><td colspan="7" style="color:var(--errink)">불러오지 못함: ${esc(r.error)}</td></tr>`).join('');
+}
+
+function insList(items, emptyText) {
+  if (!items.length) return `<div class="none">${emptyText}</div>`;
+  return '<ul class="ins">' + items.map(i => `<li>
+    <div class="hd"><span class="lv ${esc(i.level)}">${esc(i.level)}</span><span class="t">${esc(i.title)}</span>
+      <span class="w">${esc(i.country)} · ${esc(i.indicator)}</span></div>
+    <p>${esc(i.text)}</p><div class="b">근거: ${esc(i.basis)}</div></li>`).join('') + '</ul>';
+}
+function renderInsights() {
+  const ins = DATA && DATA.insights;
+  if (!ins) { $('insNew').innerHTML = $('insNow').innerHTML = '<div class="none">업데이트를 누르면 해설이 나옵니다.</div>'; return; }
+  const newEmpty = ins.new_count ? '새로 발표된 지표에서 기준에 걸린 변화가 없습니다.' : '지난 업데이트 이후 새로 발표된 지표가 없습니다.';
+  $('insNew').innerHTML = (ins.first_run ? '<p class="sub" style="margin:0 0 8px">첫 업데이트라 모든 지표를 이번 발표로 보고 점검했습니다.</p>' : '') + insList(ins.new, newEmpty);
+  $('insNow').innerHTML = insList(ins.now, '지금 기준에 걸린 신호가 없습니다.');
+}
+
+// ---------- 텔레그램 브리핑 ----------
+const dirTag = d => d ? `<span class="dir ${d === '상승' ? 'up' : d === '하락' ? 'down' : ''}">${esc(d)}</span>` : '';
+const link = (u, t = '원문') => u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${t}</a>` : '';
+function causeRows(x) {
+  const fromBody = x.cause_from_body ? ' <span class="kind">(본문에서)</span>' : '';
+  // '하락 후 낙폭 축소'처럼 두 단계 흐름이면 단계별로 원인 → 반응을 보여 줌
+  if (x.steps && x.steps.length) return `<dl class="tg-rows">${x.steps.map((st, i) =>
+    `<dt>${i + 1}단계</dt><dd>${st.cause ? `${esc(st.cause)}${i === 0 ? fromBody : ''} → ` : ''}${dirTag(st.direction)}${esc(st.reaction)}</dd>`).join('')}
+    ${x.contra ? `<dt>반대 재료</dt><dd>${esc(x.contra)}</dd>` : ''}</dl>`;
+  return `<dl class="tg-rows">${x.cause ? `<dt>원인</dt><dd>${esc(x.cause)}${fromBody}</dd>` : ''}
+    <dt>반응</dt><dd>${dirTag(x.direction)}${esc(x.reaction)}</dd>
+    ${x.contra ? `<dt>반대 재료</dt><dd>${esc(x.contra)}</dd>` : ''}</dl>`;
+}
+function tgGroup(ch, g) {
+  let left = '', right = '';
+  if (g.headline) left += `<div class="tg-head">${esc(g.headline.date)} 미 증시 ${dirTag(g.headline.direction)}</div>${causeRows(g.headline)}`;
+  if (g.factors && g.factors.length) left += `<div class="tg-sec">핵심 요인 <span class="kind">(단어에 커서를 올리거나 누르면 관련 내용)</span></div>
+    <div class="chips">${g.factors.map(f => factorChip(f, g.factor_notes ? (g.factor_notes[f] || []) : null)).join('')}</div>`;
+  const st = g.stocks;
+  if (st && (st.up.length || st.down.length || (st.mixed || []).length)) left += `<div class="tg-sec">특징 종목 ${link(st.link)}</div><dl class="tg-rows">
+      ${st.up.length ? `<dt>▲ 상승</dt><dd>${esc(st.up.join(', '))}</dd>` : ''}
+      ${st.down.length ? `<dt>▼ 하락</dt><dd>${esc(st.down.join(', '))}</dd>` : ''}
+      ${(st.mixed || []).length ? `<dt>↕ 등락</dt><dd>${esc(st.mixed.join(', '))}</dd>` : ''}</dl>`;
+  if (g.sectors.length) left += `<div class="tg-sec">업종</div><ul class="tg-list">${g.sectors.map(x => `<li>${dirTag(x.direction)}<b>${esc(x.name)}</b>: ${esc(x.text)}</li>`).join('')}</ul>`;
+  if (g.korea) right += `<div class="tg-sec">한국 증시 ${link(g.korea.link)}</div>${causeRows(g.korea)}`;
+  if (g.bitcoin) right += `<div class="tg-sec">비트코인 ${link(g.bitcoin.link)}</div>${causeRows(g.bitcoin)}`;
+  if (g.causes.length) right += `<div class="tg-sec">변화 요인 설명</div><ul class="tg-list">${g.causes.map(c => `<li>${esc(c)}</li>`).join('')}</ul>`;
+  if (g.expects.length) right += `<div class="tg-sec">예상치 대비 언급</div><ul class="tg-list">${g.expects.map(e =>
+    `<li><span class="kind">[${esc(e.kind || '')}]</span>${esc(e.text || e)}</li>`).join('')}</ul>`;
+  if (g.fallback.length) right += `<div class="tg-sec">정해진 형식이 아니라 첫 줄만 표시</div><ul class="tg-list">${g.fallback.map(x => `<li>${esc(x.text)} ${link(x.link)}</li>`).join('')}</ul>`;
+  return `<article class="tg-card"><div class="tg-top"><span>${esc(ch.title)} · ${esc(g.start)} 게시 · 글 ${g.links.length}개</span>${link(g.links[0], '원문 보기')}</div>
+    <div class="tg-cols"><div class="tg-col">${left}</div><div class="tg-col">${right}</div></div></article>`;
+}
+// 핵심 요인 단어 + 관련 문장 메모(커서를 올리거나, 눌러서 열기)
+function highlight(text, words) {
+  let h = esc(text);
+  for (const w of words || []) {
+    if (!w) continue;
+    // 띄어쓰기가 달라도 강조: '신용위험' → '신용 위험'도 표시
+    const pat = [...w.replace(/\s+/g, '')].map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s*');
+    h = h.replace(new RegExp(pat, 'g'), m => `<mark>${m}</mark>`);
+  }
+  return h;
+}
+function factorChip(f, notes) {
+  const body = notes === null
+    ? '<div class="sub">메모 정보가 없습니다. 서버를 다시 켠 뒤 업데이트를 누르면 관련 문장이 나옵니다.</div>'
+    : notes.length
+      ? `<ul>${notes.map(n => `<li>${highlight(n.text, n.hit)}${link(n.link)}</li>`).join('')}</ul>`
+      : '<div class="sub">그날 글에서 이 단어가 들어간 문장을 찾지 못했습니다.</div>';
+  notes = notes || [];
+  return `<span class="fwrap"><button type="button" class="chip${notes.length ? ' has' : ''}" aria-expanded="false">${esc(f)}</button>
+    <span class="pop" role="tooltip"><h4>${esc(f)} 관련 내용</h4>${body}</span></span>`;
+}
+function placePop(wrap) {   // 화면 오른쪽 밖으로 나가지 않게 위치 조정
+  const pop = wrap.querySelector('.pop'); if (!pop) return;
+  pop.style.left = '0px';
+  const r = pop.getBoundingClientRect(), over = r.right - (window.innerWidth - 12);
+  if (over > 0) pop.style.left = `${-over}px`;
+}
+
+// 날짜 단추: 미 증시 제목의 날짜(없으면 게시일)로 표시하고, 오래된 날짜부터 왼쪽에 둠
+const tgDayLabel = g => (g.headline && g.headline.date) || g.start.slice(0, 5);
+let tgSel = {};   // 채널별로 고른 날짜 단추
+function renderTelegram() {
+  const tg = DATA && DATA.telegram;
+  if (!tg) { $('tg').innerHTML = '<div class="none">업데이트를 누르면 텔레그램 브리핑이 나옵니다.</div>'; return; }
+  if (tg.status !== 'ok') { $('tg').innerHTML = `<div class="none">${esc(tg.message)}</div>`; return; }
+  $('tg').innerHTML = tg.channels.map(ch => {
+    if (!ch.groups.length) return `<div class="none">${esc(ch.title)}: 최근 글 중 시황 형식에 맞는 글이 없습니다.</div>`;
+    const days = ch.groups.slice().reverse();                 // 서버는 최신부터 주므로 뒤집어 오래된 날짜를 왼쪽에
+    const labels = days.map(tgDayLabel);
+    const keys = days.map(d => d.links[0]);                   // 같은 날짜가 두 번 있어도 구분되도록 첫 글 주소로 구분
+    if (!keys.includes(tgSel[ch.id])) tgSel[ch.id] = keys[keys.length - 1];   // 기본은 가장 최근 날짜
+    const g = days[keys.indexOf(tgSel[ch.id])];
+    return `<div class="tg-days" role="tablist" aria-label="${esc(ch.title)} 날짜 선택">${days.map((d, i) =>
+        `<button type="button" class="tg-day" role="tab" data-ch="${esc(ch.id)}" data-day="${esc(keys[i])}" aria-selected="${keys[i] === tgSel[ch.id]}">
+          ${esc(labels[i])}${d.headline && d.headline.direction ? ` <small>${esc(d.headline.direction)}</small>` : ''}</button>`).join('')}</div>` +
+      tgGroup(ch, g);
+  }).join('') + tg.channels.map(ch =>
+    (ch.others && ch.others.length ? `<div class="tg-sec" style="margin-top:14px">${esc(ch.title)} · 그 밖의 글</div>
+      <ul class="tg-list">${ch.others.map(x => `<li>${esc(x.text)} ${link(x.link)}</li>`).join('')}</ul>` : '')).join('');
+}
+$('tg').addEventListener('mouseover', e => { const w = e.target.closest('.fwrap'); if (w) placePop(w); });
+$('tg').addEventListener('focusin', e => { const w = e.target.closest('.fwrap'); if (w) placePop(w); });
+document.addEventListener('click', e => {      // 휴대폰처럼 커서가 없을 때는 눌러서 열고 닫음
+  const chip = e.target.closest('button.chip');
+  for (const w of document.querySelectorAll('.fwrap.open')) if (!chip || w !== chip.parentElement) { w.classList.remove('open'); w.querySelector('button').setAttribute('aria-expanded', 'false'); }
+  if (chip) { const w = chip.parentElement; const open = w.classList.toggle('open'); chip.setAttribute('aria-expanded', open); if (open) placePop(w); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') for (const w of document.querySelectorAll('.fwrap.open')) w.classList.remove('open'); });
+$('tg').addEventListener('click', e => {
+  const b = e.target.closest('.tg-day'); if (!b) return;
+  tgSel[b.dataset.ch] = b.dataset.day;
+  renderTelegram();
+});
+
+function showError(msg) { $('notices').innerHTML = `<div class="notice error">${esc(msg)}</div>` + $('notices').innerHTML; }
+
+async function update() {
+  const btn = $('updateBtn');
+  btn.disabled = true; btn.classList.add('busy'); $('btnText').textContent = '불러오는 중…';
+  try {
+    const res = await fetch('/api/update', {method: 'POST'});
+    const js = await res.json();
+    if (!res.ok) throw new Error(js.error || `서버 오류 ${res.status}`);
+    DATA = js; render(); checkPending();
+  } catch (e) {
+    showError(e.message.includes('fetch') ? OFF_MSG : e.message);
+  } finally {
+    btn.disabled = false; btn.classList.remove('busy'); $('btnText').textContent = '업데이트';
+  }
+}
+
+$('updateBtn').addEventListener('click', update);
+$('tableTabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab'); if (!t) return;
+  tableFilter = t.dataset.t; try { localStorage.setItem('table-filter', tableFilter); } catch (er) {}
+  renderTable();
+});
+$('tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab'); if (!t) return;
+  filter = t.dataset.f; try { localStorage.setItem('ind-filter', filter); } catch (er) {}
+  render();
+});
+
+fetch('/api/latest').then(r => r.json()).then(js => { DATA = js; render(); })
+  .catch(() => { render(); showError(OFF_MSG); });
+
+// ---------- 새 발표 확인: 업데이트 버튼 아래에 반영할 지표 개수 표시 ----------
+let lastCheck = 0, checking = false;
+const shortName = p => `${p.name.replace(/\(.*\)/, '')}(${p.country})`;
+async function checkPending() {
+  if (checking) return;
+  checking = true;
+  $('pending').textContent = '새 발표 확인 중…';
+  try {
+    const res = await fetch('/api/check');
+    const js = await res.json();
+    if (js.busy) { $('pending').textContent = '업데이트 중이라 잠시 뒤에 다시 확인합니다.'; setTimeout(() => { checking = false; checkPending(); }, 20000); return; }
+    if (!res.ok) throw new Error(js.error || '확인 실패');
+    lastCheck = Date.now();
+    showPending(js);
+  } catch (e) {
+    $('pending').innerHTML = `새 발표를 확인하지 못했습니다. <button type="button" id="recheck">다시 확인</button>`;
+    $('btnCnt').hidden = true;
+  } finally { checking = false; }
+}
+function showPending(js) {
+  const releases = js.pending.filter(p => p.freq !== 'D');   // 월·주·분기 발표 지표
+  const daily = js.pending.filter(p => p.freq === 'D');      // 매일 바뀌는 시장 가격·금리
+  const time = js.checked_at.slice(11, 16);
+  const total = js.pending.length;
+  $('btnCnt').hidden = !total; $('btnCnt').textContent = total;
+  if (js.never_updated) {
+    $('pending').innerHTML = `아직 한 번도 업데이트하지 않았습니다. 업데이트를 눌러 주세요.`; return;
+  }
+  if (!total) {
+    $('pending').innerHTML = `모든 지표가 최신 상태입니다 · ${time} 확인 <button type="button" id="recheck">다시 확인</button>`; return;
+  }
+  const names = releases.slice(0, 3).map(shortName).join(', ') + (releases.length > 3 ? ` 외\u00a0${releases.length - 3}개` : '');
+  $('pending').innerHTML =
+    `업데이트할 사항 <b>${total}개</b>가 있습니다<br>` +
+    (releases.length ? `새 발표 <b>${releases.length}개</b>: ${esc(names)}<br>` : '새로 발표된 경제 지표는 없습니다<br>') +
+    (daily.length ? `일별 시장 자료 <b>${daily.length}개</b> 갱신 가능<br>` : '') +
+    `${time} 확인` + (js.errors.length ? ` · 확인 실패 ${js.errors.length}개` : '') +
+    ` <button type="button" id="recheck">다시 확인</button>`;
+}
+$('pending').addEventListener('click', e => { if (e.target.id === 'recheck') checkPending(); });
+checkPending();
+setInterval(() => { if (!document.hidden) checkPending(); }, 30 * 60 * 1000);   // 열려 있으면 30분마다 확인
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && Date.now() - lastCheck > 10 * 60 * 1000) checkPending();   // 다시 볼 때 10분 넘었으면 확인
+});
+
+// 창이 열려 있는 동안 서버에 신호를 보내 서버가 자동으로 꺼지지 않게 함
+const ping = () => fetch('/api/ping').catch(() => {});
+setInterval(ping, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
+}
+</script>
+</body>
+</html>

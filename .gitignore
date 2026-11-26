@@ -1,0 +1,12 @@
+# ---- 개인 정보·키 (절대 올리지 않음) ----
+config.py
+*.session
+*.session-journal
+
+# ---- 실행하면서 생기는 자료 ----
+data/
+reports/
+
+# ---- 파이썬 임시 파일 ----
+__pycache__/
+*.pyc
