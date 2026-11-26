@@ -2,7 +2,9 @@
 
 미국·한국 주요 경제 지표를 버튼 하나로 받아 와서 **직전 발표값과의 차이, 1년 추세, 최근 10년 중 위치**를 한 화면에 보여 주고, 정해 둔 기준에 따라 **주목할 점을 해설**하는 개인용 대시보드입니다. 구독 중인 시황 텔레그램 채널의 글을 규칙에 따라 정리한 **텔레그램 브리핑**도 함께 보여 줍니다.
 
-<!-- 화면 캡처를 넣을 자리: 텔레그램 칸에는 실제 채널 글이 보이지 않는 화면을 사용하세요 -->
+<img width="614" height="462" alt="image" src="https://github.com/user-attachments/assets/2aa173e1-f807-4fff-befb-f4b8cfddc4c3" />
+<img width="593" height="464" alt="image" src="https://github.com/user-attachments/assets/58dcf6bf-76cb-4a34-9ef0-088a6a55424c" />
+
 
 ## 만든 이유
 
